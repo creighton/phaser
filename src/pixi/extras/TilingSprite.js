@@ -154,7 +154,7 @@ PIXI.TilingSprite.prototype.setTexture = function(texture)
 */
 PIXI.TilingSprite.prototype._renderWebGL = function(renderSession)
 {
-    if (this.visible === false || this.alpha === 0)
+    if (!this.visible || !this.renderable || this.alpha === 0)
     {
         return;
     }
@@ -174,7 +174,7 @@ PIXI.TilingSprite.prototype._renderWebGL = function(renderSession)
 
     if (this.refreshTexture)
     {
-        this.generateTilingTexture(true);
+        this.generateTilingTexture(true, renderSession);
 
         if (this.tilingTexture)
         {
@@ -222,7 +222,7 @@ PIXI.TilingSprite.prototype._renderWebGL = function(renderSession)
 */
 PIXI.TilingSprite.prototype._renderCanvas = function(renderSession)
 {
-    if (this.visible === false || this.alpha === 0)
+    if (!this.visible || !this.renderable || this.alpha === 0)
     {
         return;
     }
@@ -238,12 +238,14 @@ PIXI.TilingSprite.prototype._renderCanvas = function(renderSession)
     
     var wt = this.worldTransform;
     var resolution = renderSession.resolution;
+    var tx = (wt.tx * resolution) + renderSession.shakeX;
+    var ty = (wt.ty * resolution) + renderSession.shakeY;
 
-    context.setTransform(wt.a * resolution, wt.b * resolution, wt.c * resolution, wt.d * resolution, wt.tx * resolution, wt.ty * resolution);
+    context.setTransform(wt.a * resolution, wt.b * resolution, wt.c * resolution, wt.d * resolution, tx, ty);
 
     if (this.refreshTexture)
     {
-        this.generateTilingTexture(false);
+        this.generateTilingTexture(false, renderSession);
     
         if (this.tilingTexture)
         {
@@ -332,8 +334,9 @@ PIXI.TilingSprite.prototype.onTextureUpdate = function()
 * @method generateTilingTexture
 * 
 * @param forcePowerOfTwo {Boolean} Whether we want to force the texture to be a power of two
+* @param renderSession {RenderSession} 
 */
-PIXI.TilingSprite.prototype.generateTilingTexture = function(forcePowerOfTwo)
+PIXI.TilingSprite.prototype.generateTilingTexture = function(forcePowerOfTwo, renderSession)
 {
     if (!this.texture.baseTexture.hasLoaded)
     {
@@ -343,8 +346,8 @@ PIXI.TilingSprite.prototype.generateTilingTexture = function(forcePowerOfTwo)
     var texture = this.texture;
     var frame = texture.frame;
 
-    var targetWidth = this._frame.sourceSizeW;
-    var targetHeight = this._frame.sourceSizeH;
+    var targetWidth = this._frame.sourceSizeW || this._frame.width;
+    var targetHeight = this._frame.sourceSizeH || this._frame.height;
 
     var dx = 0;
     var dy = 0;
@@ -371,7 +374,6 @@ PIXI.TilingSprite.prototype.generateTilingTexture = function(forcePowerOfTwo)
     else
     {
         this.canvasBuffer = new PIXI.CanvasBuffer(targetWidth, targetHeight);
-        this.tilingTexture = PIXI.Texture.fromCanvas(this.canvasBuffer.canvas);
         this.tilingTexture = PIXI.Texture.fromCanvas(this.canvasBuffer.canvas);
         this.tilingTexture.isTiling = true;
         this.tilingTexture.needsUpdate = true;
@@ -492,9 +494,13 @@ PIXI.TilingSprite.prototype.getBounds = function()
 
 PIXI.TilingSprite.prototype.destroy = function () {
 
-    this.canvasBuffer.destroy();
-
     PIXI.Sprite.prototype.destroy.call(this);
+
+    if (this.canvasBuffer)
+    {
+        this.canvasBuffer.destroy();
+        this.canvasBuffer = null;
+    }
 
     this.tileScale = null;
     this.tileScaleOffset = null;

@@ -1,6 +1,6 @@
 /**
 * @author       Richard Davey <rich@photonstorm.com>
-* @copyright    2015 Photon Storm Ltd.
+* @copyright    2016 Photon Storm Ltd.
 * @license      {@link https://github.com/photonstorm/phaser/blob/master/license.txt|MIT License}
 */
 
@@ -369,6 +369,70 @@ Phaser.Physics.P2.Body.prototype = {
     },
 
     /**
+    * Removes the given CollisionGroup, or array of CollisionGroups, from the list of groups that this body will collide with and updates the collision masks.
+    *
+    * @method Phaser.Physics.P2.Body#removeCollisionGroup
+    * @param {Phaser.Physics.CollisionGroup|array} group - The Collision Group or Array of Collision Groups that this Bodies shapes should not collide with anymore.
+    * @param {boolean} [clearCallback=true] - Clear the callback that will be triggered when this Body impacts with the given Group?
+    * @param {p2.Shape} [shape] - An optional Shape. If not provided the updated collision mask will be added to all Shapes in this Body.
+    */
+    removeCollisionGroup: function (group, clearCallback, shape) {
+
+        if (clearCallback === undefined) { clearCallback = true; }
+
+        var index;
+
+        if (Array.isArray(group))
+        {
+            for (var i = 0; i < group.length; i++)
+            {
+                index = this.collidesWith.indexOf(group[i]);
+
+                if (index > -1)
+                {
+                    this.collidesWith.splice(index, 1);
+
+                    if (clearCallback)
+                    {
+                        delete (this._groupCallbacks[group.mask]);
+                        delete (this._groupCallbackContext[group.mask]);
+                    }
+                }
+            }
+        }
+        else
+        {
+            index = this.collidesWith.indexOf(group);
+
+            if (index > -1)
+            {
+                this.collidesWith.splice(index, 1);
+
+                if (clearCallback)
+                {
+                    delete (this._groupCallbacks[group.mask]);
+                    delete (this._groupCallbackContext[group.mask]);
+                }
+            }
+        }
+
+        var mask = this.getCollisionMask();
+
+        if (shape === undefined)
+        {
+            for (var i = this.data.shapes.length - 1; i >= 0; i--)
+            {
+                this.data.shapes[i].collisionMask = mask;
+            }
+        }
+        else
+        {
+            shape.collisionMask = mask;
+        }
+
+    },
+
+    /**
     * Adds the given CollisionGroup, or array of CollisionGroups, to the list of groups that this body will collide with and updates the collision masks.
     *
     * @method Phaser.Physics.P2.Body#collides
@@ -484,7 +548,7 @@ Phaser.Physics.P2.Body.prototype = {
     * period of time (impulse = force * time). Impulses will be added to Body.velocity and Body.angularVelocity.
     *
     * @method Phaser.Physics.P2.Body#applyImpulseLocal
-    * @param {Float32Array|Array} impulse - The impulse vector to add, oriented in world space.
+    * @param {Float32Array|Array} impulse - The impulse vector to add, oriented in local space.
     * @param {number} localX - A local point on the body.
     * @param {number} localY - A local point on the body.
     */
@@ -659,6 +723,40 @@ Phaser.Physics.P2.Body.prototype = {
     },
 
     /**
+    * Applies a force to the Body that causes it to 'thrust' to the left, based on its current angle and the given speed.
+    * The speed is represented in pixels per second. So a value of 100 would move 100 pixels in 1 second (1000ms).
+    *
+    * @method Phaser.Physics.P2.Body#thrustLeft
+    * @param {number} speed - The speed at which it should move to the left.
+    */
+    thrustLeft: function (speed) {
+
+        var magnitude = this.world.pxmi(-speed);
+        var angle = this.data.angle;
+
+        this.data.force[0] += magnitude * Math.cos(angle);
+        this.data.force[1] += magnitude * Math.sin(angle);
+
+    },
+
+    /**
+    * Applies a force to the Body that causes it to 'thrust' to the right, based on its current angle and the given speed.
+    * The speed is represented in pixels per second. So a value of 100 would move 100 pixels in 1 second (1000ms).
+    *
+    * @method Phaser.Physics.P2.Body#thrustRight
+    * @param {number} speed - The speed at which it should move to the right.
+    */
+    thrustRight: function (speed) {
+
+        var magnitude = this.world.pxmi(-speed);
+        var angle = this.data.angle;
+
+        this.data.force[0] -= magnitude * Math.cos(angle);
+        this.data.force[1] -= magnitude * Math.sin(angle);
+
+    },
+
+    /**
     * Applies a force to the Body that causes it to 'thrust' backwards (in reverse), based on its current angle and the given speed.
     * The speed is represented in pixels per second. So a value of 100 would move 100 pixels in 1 second (1000ms).
     *
@@ -753,8 +851,8 @@ Phaser.Physics.P2.Body.prototype = {
     */
     postUpdate: function () {
 
-        this.sprite.x = this.world.mpxi(this.data.position[0]);
-        this.sprite.y = this.world.mpxi(this.data.position[1]);
+        this.sprite.x = this.world.mpxi(this.data.position[0]) + this.offset.x;
+        this.sprite.y = this.world.mpxi(this.data.position[1]) + this.offset.y;
 
         if (!this.fixedRotation)
         {
@@ -1211,11 +1309,14 @@ Phaser.Physics.P2.Body.prototype = {
 
     /**
     * Reads the shape data from a physics data file stored in the Game.Cache and adds it as a polygon to this Body.
-    * The shape data format is based on the custom phaser export in.
+    * The shape data format is based on the output of the
+    * {@link https://github.com/photonstorm/phaser/tree/master/resources/PhysicsEditor%20Exporter|custom phaser exporter} for
+    * {@link https://www.codeandweb.com/physicseditor|PhysicsEditor}
     *
     * @method Phaser.Physics.P2.Body#addPhaserPolygon
     * @param {string} key - The key of the Physics Data file as stored in Game.Cache.
     * @param {string} object - The key of the object within the Physics data file that you wish to load the shape data from.
+    * @returns {Array} A list of created fixtures to be used with Phaser.Physics.P2.FixtureList
     */
     addPhaserPolygon: function (key, object) {
 

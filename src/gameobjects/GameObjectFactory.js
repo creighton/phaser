@@ -1,6 +1,6 @@
 /**
 * @author       Richard Davey <rich@photonstorm.com>
-* @copyright    2015 Photon Storm Ltd.
+* @copyright    2016 Photon Storm Ltd.
 * @license      {@link https://github.com/photonstorm/phaser/blob/master/license.txt|MIT License}
 */
 
@@ -42,6 +42,36 @@ Phaser.GameObjectFactory.prototype = {
     existing: function (object) {
 
         return this.world.add(object);
+
+    },
+
+    /**
+    * Weapons provide the ability to easily create a bullet pool and manager.
+    *
+    * Weapons fire Phaser.Bullet objects, which are essentially Sprites with a few extra properties.
+    * The Bullets are enabled for Arcade Physics. They do not currently work with P2 Physics.
+    *
+    * The Bullets are created inside of `Weapon.bullets`, which is a Phaser.Group instance. Anything you
+    * can usually do with a Group, such as move it around the display list, iterate it, etc can be done
+    * to the bullets Group too.
+    *
+    * Bullets can have textures and even animations. You can control the speed at which they are fired,
+    * the firing rate, the firing angle, and even set things like gravity for them.
+    *
+    * @method Phaser.GameObjectFactory#weapon
+    * @param {integer} [quantity=1] - The quantity of bullets to seed the Weapon with. If -1 it will set the pool to automatically expand.
+    * @param {string|Phaser.RenderTexture|Phaser.BitmapData|Phaser.Video|PIXI.Texture} [key] - The image used as a texture by the bullets during rendering. If a string Phaser will get for an entry in the Image Cache. Or it can be an instance of a RenderTexture, BitmapData, Video or PIXI.Texture.
+    * @param {string|number} [frame] - If a Texture Atlas or Sprite Sheet is used this allows you to specify the frame to be used by the bullets. Use either an integer for a Frame ID or a string for a frame name.
+    * @param {Phaser.Group} [group] - Optional Group to add the Weapon to. If not specified it will be added to the World group.
+    * @returns {Phaser.Weapon} A Weapon instance.
+    */
+    weapon: function (quantity, key, frame, group) {
+
+        var weapon = this.game.plugins.add(Phaser.Weapon);
+
+        weapon.createBullets(quantity, key, frame, group);
+
+        return weapon;
 
     },
 
@@ -164,7 +194,7 @@ Phaser.GameObjectFactory.prototype = {
     * are automatically given a physics body.
     *
     * @method Phaser.GameObjectFactory#physicsGroup
-    * @param {number} [physicsBodyType=Phaser.Physics.ARCADE] - If enableBody is true this is the type of physics body that is created on new Sprites. Phaser.Physics.ARCADE, Phaser.Physics.P2, Phaser.Physics.NINJA, etc.
+    * @param {number} [physicsBodyType=Phaser.Physics.ARCADE] - If enableBody is true this is the type of physics body that is created on new Sprites. Phaser.Physics.ARCADE, Phaser.Physics.P2JS, Phaser.Physics.NINJA, etc.
     * @param {any} [parent] - The parent Group or DisplayObjectContainer that will hold this group, if any. If set to null the Group won't be added to the display list. If undefined it will be added to World by default.
     * @param {string} [name='group'] - A name for this Group. Not used internally but useful for debugging.
     * @param {boolean} [addToStage=false] - If set to true this Group will be added directly to the Game.Stage instead of Game.World.
@@ -250,7 +280,7 @@ Phaser.GameObjectFactory.prototype = {
     * @param {number} y - The y coordinate of the TileSprite. The coordinate is relative to any parent container this TileSprite may be in.
     * @param {number} width - The width of the TileSprite.
     * @param {number} height - The height of the TileSprite.
-    * @param {string|Phaser.RenderTexture|Phaser.BitmapData|Phaser.Video|PIXI.Texture} key - The image used as a texture by this display object during rendering. If a string Phaser will get for an entry in the Image Cache. Or it can be an instance of a RenderTexture, BitmapData, Video or PIXI.Texture.
+    * @param {string|Phaser.BitmapData|PIXI.Texture} key - This is the image or texture used by the TileSprite during rendering. It can be a string which is a reference to the Phaser Image Cache entry, or an instance of a PIXI.Texture or BitmapData.
     * @param {string|number} [frame] - If a Texture Atlas or Sprite Sheet is used this allows you to specify the frame to be used. Use either an integer for a Frame ID or a string for a frame name.
     * @param {Phaser.Group} [group] - Optional Group to add the object to. If not specified it will be added to the World group.
     * @return {Phaser.TileSprite} The newly created TileSprite object.
@@ -531,7 +561,7 @@ Phaser.GameObjectFactory.prototype = {
     */
     filter: function (filter) {
 
-        var args = Array.prototype.splice.call(arguments, 1);
+        var args = Array.prototype.slice.call(arguments, 1);
 
         var filter = new Phaser.Filter[filter](this.game);
 

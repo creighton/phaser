@@ -1,6 +1,6 @@
 /**
 * @author       Richard Davey <rich@photonstorm.com>
-* @copyright    2015 Photon Storm Ltd.
+* @copyright    2016 Photon Storm Ltd.
 * @license      {@link https://github.com/photonstorm/phaser/blob/master/license.txt|MIT License}
 */
 
@@ -11,8 +11,9 @@
 * @constructor
 * @param {Phaser.Game} game - A reference to the currently running game.
 * @param {number} id - The ID of the Pointer object within the game. Each game can have up to 10 active pointers.
+* @param {Phaser.PointerMode} pointerMode=(CURSOR|CONTACT) - The operational mode of this pointer, eg. CURSOR or TOUCH.
 */
-Phaser.Pointer = function (game, id) {
+Phaser.Pointer = function (game, id, pointerMode) {
 
     /**
     * @property {Phaser.Game} game - A reference to the currently running game.
@@ -47,6 +48,11 @@ Phaser.Pointer = function (game, id) {
     * @default
     */
     this.pointerId = null;
+
+    /**
+    * @property {Phaser.PointerMode} pointerMode - The operational mode of this pointer.
+    */
+    this.pointerMode = pointerMode || (Phaser.PointerMode.CURSOR | Phaser.PointerMode.CONTACT);
 
     /**
     * @property {any} target - The target property of the Pointer as set by the DOM event when this Pointer is started.
@@ -291,6 +297,17 @@ Phaser.Pointer = function (game, id) {
     * @default
     */
     this.targetObject = null;
+
+    /**
+    * This array is erased and re-populated every time this Pointer is updated. It contains references to all
+    * of the Game Objects that were considered as being valid for processing by this Pointer, this frame. To be
+    * valid they must have suitable a `priorityID`, be Input enabled, visible and actually have the Pointer over
+    * them. You can check the contents of this array in events such as `onInputDown`, but beware it is reset
+    * every frame.
+    * @property {array} interactiveCandidates
+    * @default
+    */
+    this.interactiveCandidates = [];
 
     /**
     * @property {boolean} active - An active pointer is one that is currently pressed down on the display. A Mouse is always active.
@@ -547,10 +564,12 @@ Phaser.Pointer.prototype = {
         }
 
         //  On OS X (and other devices with trackpads) you have to press CTRL + the pad
-        //  to initiate a right-click event, so we'll check for that here
+        //  to initiate a right-click event, so we'll check for that here ONLY if
+        //  event.buttons = 1 (i.e. they only have a 1 button mouse or trackpad)
 
-        if (event.ctrlKey && this.leftButton.isDown)
+        if (event.buttons === 1 && event.ctrlKey && this.leftButton.isDown)
         {
+            this.leftButton.stop(event);
             this.rightButton.start(event);
         }
 
@@ -571,6 +590,8 @@ Phaser.Pointer.prototype = {
     * @param {any} event - The DOM event from the browser.
     */
     start: function (event) {
+
+        var input = this.game.input;
 
         if (event['pointerId'])
         {
@@ -609,18 +630,19 @@ Phaser.Pointer.prototype = {
         // x and y are the old values here?
         this.positionDown.setTo(this.x, this.y);
 
-        if (this.game.input.multiInputOverride === Phaser.Input.MOUSE_OVERRIDES_TOUCH ||
-            this.game.input.multiInputOverride === Phaser.Input.MOUSE_TOUCH_COMBINE ||
-            (this.game.input.multiInputOverride === Phaser.Input.TOUCH_OVERRIDES_MOUSE && this.game.input.totalActivePointers === 0))
+        if (input.multiInputOverride === Phaser.Input.MOUSE_OVERRIDES_TOUCH ||
+            input.multiInputOverride === Phaser.Input.MOUSE_TOUCH_COMBINE ||
+            (input.multiInputOverride === Phaser.Input.TOUCH_OVERRIDES_MOUSE && input.totalActivePointers === 0))
         {
-            this.game.input.x = this.x;
-            this.game.input.y = this.y;
-            this.game.input.position.setTo(this.x, this.y);
-            this.game.input.onDown.dispatch(this, event);
-            this.game.input.resetSpeed(this.x, this.y);
+            input.x = this.x;
+            input.y = this.y;
+            input.position.setTo(this.x, this.y);
+            input.onDown.dispatch(this, event);
+            input.resetSpeed(this.x, this.y);
         }
 
         this._stateReset = false;
+
         this.totalTouches++;
 
         if (this.targetObject !== null)
@@ -638,12 +660,14 @@ Phaser.Pointer.prototype = {
     */
     update: function () {
 
+        var input = this.game.input;
+
         if (this.active)
         {
             //  Force a check?
             if (this.dirty)
             {
-                if (this.game.input.interactiveItems.total > 0)
+                if (input.interactiveItems.total > 0)
                 {
                     this.processInteractiveObjects(false);
                 }
@@ -651,29 +675,29 @@ Phaser.Pointer.prototype = {
                 this.dirty = false;
             }
 
-            if (this._holdSent === false && this.duration >= this.game.input.holdRate)
+            if (this._holdSent === false && this.duration >= input.holdRate)
             {
-                if (this.game.input.multiInputOverride === Phaser.Input.MOUSE_OVERRIDES_TOUCH ||
-                    this.game.input.multiInputOverride === Phaser.Input.MOUSE_TOUCH_COMBINE ||
-                    (this.game.input.multiInputOverride === Phaser.Input.TOUCH_OVERRIDES_MOUSE && this.game.input.totalActivePointers === 0))
+                if (input.multiInputOverride === Phaser.Input.MOUSE_OVERRIDES_TOUCH ||
+                    input.multiInputOverride === Phaser.Input.MOUSE_TOUCH_COMBINE ||
+                    (input.multiInputOverride === Phaser.Input.TOUCH_OVERRIDES_MOUSE && input.totalActivePointers === 0))
                 {
-                    this.game.input.onHold.dispatch(this);
+                    input.onHold.dispatch(this);
                 }
 
                 this._holdSent = true;
             }
 
             //  Update the droppings history
-            if (this.game.input.recordPointerHistory && this.game.time.time >= this._nextDrop)
+            if (input.recordPointerHistory && this.game.time.time >= this._nextDrop)
             {
-                this._nextDrop = this.game.time.time + this.game.input.recordRate;
+                this._nextDrop = this.game.time.time + input.recordRate;
 
                 this._history.push({
                     x: this.position.x,
                     y: this.position.y
                 });
 
-                if (this._history.length > this.game.input.recordLimit)
+                if (this._history.length > input.recordLimit)
                 {
                     this._history.shift();
                 }
@@ -790,7 +814,7 @@ Phaser.Pointer.prototype = {
     processInteractiveObjects: function (fromClick) {
 
         //  Work out which object is on the top
-        var highestRenderOrderID = Number.MAX_VALUE;
+        var highestRenderOrderID = 0;
         var highestInputPriorityID = -1;
         var candidateTarget = null;
 
@@ -798,6 +822,8 @@ Phaser.Pointer.prototype = {
         //  We know they'll be valid for input detection but not which is the top just yet
 
         var currentNode = this.game.input.interactiveItems.first;
+
+        this.interactiveCandidates = [];
 
         while (currentNode)
         {
@@ -815,6 +841,7 @@ Phaser.Pointer.prototype = {
                     highestRenderOrderID = currentNode.sprite.renderOrderID;
                     highestInputPriorityID = currentNode.priorityID;
                     candidateTarget = currentNode;
+                    this.interactiveCandidates.push(currentNode);
                 }
             }
 
@@ -825,9 +852,9 @@ Phaser.Pointer.prototype = {
         //  because if their ID is lower anyway then we can just automatically discount them
         //  (A node that was previously checked did not request a pixel-perfect check.)
 
-        var currentNode = this.game.input.interactiveItems.first;
+        currentNode = this.game.input.interactiveItems.first;
 
-        while(currentNode)
+        while (currentNode)
         {
             if (!currentNode.checked &&
                 currentNode.validForInput(highestInputPriorityID, highestRenderOrderID, true))
@@ -838,19 +865,47 @@ Phaser.Pointer.prototype = {
                     highestRenderOrderID = currentNode.sprite.renderOrderID;
                     highestInputPriorityID = currentNode.priorityID;
                     candidateTarget = currentNode;
+                    this.interactiveCandidates.push(currentNode);
                 }
             }
 
             currentNode = this.game.input.interactiveItems.next;
         }
 
+        if (this.game.input.customCandidateHandler)
+        {
+            candidateTarget = this.game.input.customCandidateHandler.call(this.game.input.customCandidateHandlerContext, this, this.interactiveCandidates, candidateTarget);
+        }
+
+        this.swapTarget(candidateTarget, false);
+
+        return (this.targetObject !== null);
+
+    },
+
+    /**
+    * This will change the `Pointer.targetObject` object to be the one provided.
+    * 
+    * This allows you to have fine-grained control over which object the Pointer is targeting.
+    *
+    * Note that even if you set a new Target here, it is still able to be replaced by any other valid
+    * target during the next Pointer update.
+    *
+    * @method Phaser.Pointer#swapTarget
+    * @param {Phaser.InputHandler} newTarget - The new target for this Pointer. Note this is an `InputHandler`, so don't pass a Sprite, instead pass `sprite.input` to it.
+    * @param {boolean} [silent=false] - If true the new target AND the old one will NOT dispatch their `onInputOver` or `onInputOut` events.
+    */
+    swapTarget: function (newTarget, silent) {
+
+        if (silent === undefined) { silent = false; }
+
         //  Now we know the top-most item (if any) we can process it
-        if (candidateTarget === null)
+        if (newTarget === null)
         {
             //  The pointer isn't currently over anything, check if we've got a lingering previous target
             if (this.targetObject)
             {
-                this.targetObject._pointerOutHandler(this);
+                this.targetObject._pointerOutHandler(this, silent);
                 this.targetObject = null;
             }
         }
@@ -859,16 +914,16 @@ Phaser.Pointer.prototype = {
             if (this.targetObject === null)
             {
                 //  And now set the new one
-                this.targetObject = candidateTarget;
-                candidateTarget._pointerOverHandler(this);
+                this.targetObject = newTarget;
+                newTarget._pointerOverHandler(this, silent);
             }
             else
             {
                 //  We've got a target from the last update
-                if (this.targetObject === candidateTarget)
+                if (this.targetObject === newTarget)
                 {
                     //  Same target as before, so update it
-                    if (candidateTarget.update(this) === false)
+                    if (newTarget.update(this) === false)
                     {
                         this.targetObject = null;
                     }
@@ -876,16 +931,14 @@ Phaser.Pointer.prototype = {
                 else
                 {
                     //  The target has changed, so tell the old one we've left it
-                    this.targetObject._pointerOutHandler(this);
+                    this.targetObject._pointerOutHandler(this, silent);
 
                     //  And now set the new one
-                    this.targetObject = candidateTarget;
-                    this.targetObject._pointerOverHandler(this);
+                    this.targetObject = newTarget;
+                    this.targetObject._pointerOverHandler(this, silent);
                 }
             }
         }
-
-        return (this.targetObject !== null);
 
     },
 
@@ -910,6 +963,8 @@ Phaser.Pointer.prototype = {
     */
     stop: function (event) {
 
+        var input = this.game.input;
+
         if (this._stateReset && this.withinGame)
         {
             event.preventDefault();
@@ -918,25 +973,25 @@ Phaser.Pointer.prototype = {
 
         this.timeUp = this.game.time.time;
 
-        if (this.game.input.multiInputOverride === Phaser.Input.MOUSE_OVERRIDES_TOUCH ||
-            this.game.input.multiInputOverride === Phaser.Input.MOUSE_TOUCH_COMBINE ||
-            (this.game.input.multiInputOverride === Phaser.Input.TOUCH_OVERRIDES_MOUSE && this.game.input.totalActivePointers === 0))
+        if (input.multiInputOverride === Phaser.Input.MOUSE_OVERRIDES_TOUCH ||
+            input.multiInputOverride === Phaser.Input.MOUSE_TOUCH_COMBINE ||
+            (input.multiInputOverride === Phaser.Input.TOUCH_OVERRIDES_MOUSE && input.totalActivePointers === 0))
         {
-            this.game.input.onUp.dispatch(this, event);
+            input.onUp.dispatch(this, event);
 
             //  Was it a tap?
-            if (this.duration >= 0 && this.duration <= this.game.input.tapRate)
+            if (this.duration >= 0 && this.duration <= input.tapRate)
             {
                 //  Was it a double-tap?
-                if (this.timeUp - this.previousTapTime < this.game.input.doubleTapRate)
+                if (this.timeUp - this.previousTapTime < input.doubleTapRate)
                 {
                     //  Yes, let's dispatch the signal then with the 2nd parameter set to true
-                    this.game.input.onTap.dispatch(this, true);
+                    input.onTap.dispatch(this, true);
                 }
                 else
                 {
                     //  Wasn't a double-tap, so dispatch a single tap signal
-                    this.game.input.onTap.dispatch(this, false);
+                    input.onTap.dispatch(this, false);
                 }
 
                 this.previousTapTime = this.timeUp;
@@ -967,10 +1022,10 @@ Phaser.Pointer.prototype = {
         
         if (this.isMouse === false)
         {
-            this.game.input.currentPointers--;
+            input.currentPointers--;
         }
 
-        this.game.input.interactiveItems.callAll('_releasedHandler', this);
+        input.interactiveItems.callAll('_releasedHandler', this);
 
         if (this._clickTrampolines)
         {
@@ -1161,7 +1216,7 @@ Object.defineProperty(Phaser.Pointer.prototype, "duration", {
 /**
 * Gets the X value of this Pointer in world coordinates based on the world camera.
 * @name Phaser.Pointer#worldX
-* @property {number} duration - The X value of this Pointer in world coordinates based on the world camera.
+* @property {number} worldX - The X value of this Pointer in world coordinates based on the world camera.
 * @readonly
 */
 Object.defineProperty(Phaser.Pointer.prototype, "worldX", {
@@ -1177,7 +1232,7 @@ Object.defineProperty(Phaser.Pointer.prototype, "worldX", {
 /**
 * Gets the Y value of this Pointer in world coordinates based on the world camera.
 * @name Phaser.Pointer#worldY
-* @property {number} duration - The Y value of this Pointer in world coordinates based on the world camera.
+* @property {number} worldY - The Y value of this Pointer in world coordinates based on the world camera.
 * @readonly
 */
 Object.defineProperty(Phaser.Pointer.prototype, "worldY", {
@@ -1189,3 +1244,32 @@ Object.defineProperty(Phaser.Pointer.prototype, "worldY", {
     }
 
 });
+
+/**
+* Enumeration categorizing operational modes of pointers.
+*
+* PointerType values represent valid bitmasks.
+* For example, a value representing both Mouse and Touch devices
+* can be expressed as `PointerMode.CURSOR | PointerMode.CONTACT`.
+*
+* Values may be added for future mode categorizations.
+* @class Phaser.PointerMode
+*/
+Phaser.PointerMode = {
+
+    /**
+    * A 'CURSOR' is a pointer with a *passive cursor* such as a mouse, touchpad, watcom stylus, or even TV-control arrow-pad.
+    *
+    * It has the property that a cursor is passively moved without activating the input.
+    * This currently corresponds with {@link Phaser.Pointer#isMouse} property.
+    * @constant
+    */
+    CURSOR: 1 << 0,
+
+    /**
+    * A 'CONTACT' pointer has an *active cursor* that only tracks movement when actived; notably this is a touch-style input.
+    * @constant
+    */
+    CONTACT: 1 << 1
+
+};

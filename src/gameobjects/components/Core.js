@@ -1,6 +1,6 @@
 /**
 * @author       Richard Davey <rich@photonstorm.com>
-* @copyright    2015 Photon Storm Ltd.
+* @copyright    2016 Photon Storm Ltd.
 * @license      {@link https://github.com/photonstorm/phaser/blob/master/license.txt|MIT License}
 */
 
@@ -57,6 +57,8 @@ Phaser.Component.Core.init = function (game, x, y, key, frame) {
 
     this.key = key;
 
+    this.data = {};
+
     this.position.set(x, y);
     this.world = new Phaser.Point(x, y);
     this.previousPosition = new Phaser.Point(x, y);
@@ -112,11 +114,6 @@ Phaser.Component.Core.preUpdate = function () {
         this.renderOrderID = this.game.stage.currentRenderOrderID++;
     }
 
-    if (this.texture)
-    {
-        this.texture.requiresReTint = false;
-    }
-
     if (this.animations)
     {
         this.animations.update();
@@ -153,6 +150,16 @@ Phaser.Component.Core.prototype = {
     name: '',
 
     /**
+    * An empty Object that belongs to this Game Object.
+    * This value isn't ever used internally by Phaser, but may be used by your own code, or
+    * by Phaser Plugins, to store data that needs to be associated with the Game Object,
+    * without polluting the Game Object directly.
+    * @property {Object} data
+    * @default
+    */
+    data: {},
+
+    /**
     * The components this Game Object has installed.
     * @property {object} components
     * @protected
@@ -163,7 +170,9 @@ Phaser.Component.Core.prototype = {
     * The z depth of this Game Object within its parent Group.
     * No two objects in a Group can have the same z value.
     * This value is adjusted automatically whenever the Group hierarchy changes.
+    * If you wish to re-order the layering of a Game Object then see methods like Group.moveUp or Group.bringToTop.
     * @property {number} z
+    * @readOnly
     */
     z: 0,
 

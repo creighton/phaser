@@ -30,6 +30,11 @@ module.exports = {
         dest: '<%= modules_dir %>/pixi-intro.js'
     },
 
+    pixiMain: {
+        src: require('../manifests/pixi-main'),
+        dest: '<%= modules_dir %>/pixi-main.js'
+    },
+    
     pixiRope: {
         src: require('../manifests/pixi-rope'),
         dest: '<%= modules_dir %>/pixi-rope.js'
@@ -200,6 +205,11 @@ module.exports = {
         dest: '<%= modules_dir %>/arcade.js'
     },
 
+    weapon: {
+        src: require('../manifests/physics.arcade.weapon'),
+        dest: '<%= modules_dir %>/weapon.js'
+    },
+
     arcadeTilemaps: {
         src: require('../manifests/physics.arcade.tilemaps'),
         dest: '<%= modules_dir %>/arcadeTilemaps.js'
@@ -230,6 +240,36 @@ module.exports = {
         dest: '<%= modules_dir %>/particles.js'
     },
 
+    scale: {
+        src: require('../manifests/scale'),
+        dest: '<%= modules_dir %>/scale.js'
+    },
+
+    scaleStub: {
+        src: require('../manifests/scale.stub'),
+        dest: '<%= modules_dir %>/scale.js'
+    },
+
+    dom: {
+        src: require('../manifests/dom'),
+        dest: '<%= modules_dir %>/dom.js'
+    },
+
+    domStub: {
+        src: require('../manifests/dom.stub'),
+        dest: '<%= modules_dir %>/dom.js'
+    },
+
+    color: {
+        src: require('../manifests/color'),
+        dest: '<%= modules_dir %>/color.js'
+    },
+
+    colorStub: {
+        src: require('../manifests/color.stub'),
+        dest: '<%= modules_dir %>/color.js'
+    },
+
     video: {
         src: require('../manifests/video'),
         dest: '<%= modules_dir %>/video.js'
@@ -245,6 +285,31 @@ module.exports = {
         dest: '<%= modules_dir %>/tilesprite.js'
     },
 
+    tilespriteStub: {
+        src: require('../manifests/tilesprite.stub'),
+        dest: '<%= modules_dir %>/tilesprite.js'
+    },
+
+    create: {
+        src: require('../manifests/create'),
+        dest: '<%= modules_dir %>/create.js'
+    },
+
+    createStub: {
+        src: require('../manifests/create.stub'),
+        dest: '<%= modules_dir %>/create.js'
+    },
+
+    flexgrid: {
+        src: require('../manifests/flexgrid'),
+        dest: '<%= modules_dir %>/flexgrid.js'
+    },
+
+    pixidefs: {
+        src: require('../manifests/pixidefs'),
+        dest: '<%= modules_dir %>/pixidefs.js'
+    },
+    
     outro: {
         src: require('../manifests/outro'),
         dest: '<%= modules_dir %>/outro.js'

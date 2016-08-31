@@ -1,6 +1,6 @@
 /**
 * @author       Richard Davey <rich@photonstorm.com>
-* @copyright    2015 Photon Storm Ltd.
+* @copyright    2016 Photon Storm Ltd.
 * @license      {@link https://github.com/photonstorm/phaser/blob/master/license.txt|MIT License}
 */
 
@@ -9,7 +9,7 @@
 * It also handles browser visibility handling and the pausing due to loss of focus.
 *
 * @class Phaser.Stage
-* @extends PIXI.Stage
+* @extends PIXI.DisplayObjectContainer
 * @constructor
 * @param {Phaser.Game} game - Game reference to the currently running game.
  */
@@ -20,7 +20,7 @@ Phaser.Stage = function (game) {
     */
     this.game = game;
 
-    PIXI.Stage.call(this, 0x000000);
+    PIXI.DisplayObjectContainer.call(this);
 
     /**
     * @property {string} name - The name of this object.
@@ -29,7 +29,12 @@ Phaser.Stage = function (game) {
     this.name = '_stage_root';
 
     /**
-    * @property {boolean} disableVisibilityChange - By default if the browser tab loses focus the game will pause. You can stop that behaviour by setting this property to true.
+    * By default if the browser tab loses focus the game will pause.
+    * You can stop that behavior by setting this property to true.
+    * Note that the browser can still elect to pause your game if it wishes to do so,
+    * for example swapping to another browser tab. This will cause the RAF callback to halt,
+    * effectively pausing your game, even though no in-game pause event is triggered if you enable this property.
+    * @property {boolean} disableVisibilityChange
     * @default
     */
     this.disableVisibilityChange = false;
@@ -39,6 +44,20 @@ Phaser.Stage = function (game) {
     * @default
     */
     this.exists = true;
+
+    /**
+    * @property {PIXI.Matrix} worldTransform - Current transform of the object based on world (parent) factors
+    * @private
+    * @readOnly
+    */
+    this.worldTransform = new PIXI.Matrix();
+
+    /**
+    * @property {Phaser.Stage} stage - The stage reference (the Stage is its own stage)
+    * @private
+    * @readOnly
+    */
+    this.stage = this;
 
     /**
     * @property {number} currentRenderOrderID - Reset each frame, keeps a count of the total number of objects updated.
@@ -58,10 +77,16 @@ Phaser.Stage = function (game) {
     this._onChange = null;
 
     /**
-    * @property {number} _backgroundColor - Stage background color.
+    * @property {number} _bgColor - Stage background color object. Populated by setBackgroundColor.
     * @private
     */
-    this._backgroundColor = 0x000000;
+    this._bgColor = { r: 0, g: 0, b: 0, a: 0, color: 0, rgba: '#000000' };
+
+    if (!this.game.transparent)
+    {
+        //  transparent = 0,0,0,0 - otherwise r,g,b,1
+        this._bgColor.a = 1;
+    }
 
     if (game.config)
     {
@@ -70,7 +95,7 @@ Phaser.Stage = function (game) {
 
 };
 
-Phaser.Stage.prototype = Object.create(PIXI.Stage.prototype);
+Phaser.Stage.prototype = Object.create(PIXI.DisplayObjectContainer.prototype);
 Phaser.Stage.prototype.constructor = Phaser.Stage;
 
 /**
@@ -89,7 +114,7 @@ Phaser.Stage.prototype.parseConfig = function (config) {
 
     if (config['backgroundColor'])
     {
-        this.backgroundColor = config['backgroundColor'];
+        this.setBackgroundColor(config['backgroundColor']);
     }
 
 };
@@ -120,7 +145,7 @@ Phaser.Stage.prototype.preUpdate = function () {
 
     this.currentRenderOrderID = 0;
 
-    //  This can't loop in reverse, we need the orderID to be in sequence
+    //  This can't loop in reverse, we need the renderOrderID to be in sequence
     for (var i = 0; i < this.children.length; i++)
     {
         this.children[i].preUpdate();
@@ -135,6 +160,7 @@ Phaser.Stage.prototype.preUpdate = function () {
 */
 Phaser.Stage.prototype.update = function () {
 
+    //  Goes in reverse, because it's highly likely the child will destroy itself in `update`
     var i = this.children.length;
 
     while (i--)
@@ -146,41 +172,32 @@ Phaser.Stage.prototype.update = function () {
 
 /**
 * This is called automatically before the renderer runs and after the plugins have updated.
-* In postUpdate this is where all the final physics calculatations and object positioning happens.
+* In postUpdate this is where all the final physics calculations and object positioning happens.
 * The objects are processed in the order of the display list.
-* The only exception to this is if the camera is following an object, in which case that is updated first.
 *
 * @method Phaser.Stage#postUpdate
 */
 Phaser.Stage.prototype.postUpdate = function () {
 
-    if (this.game.world.camera.target)
+    //  Apply the camera shake, fade, bounds, etc
+    this.game.camera.update();
+
+    //  Camera target first?
+    if (this.game.camera.target)
     {
-        this.game.world.camera.target.postUpdate();
+        this.game.camera.target.postUpdate();
 
-        this.game.world.camera.update();
+        this.updateTransform();
 
-        var i = this.children.length;
-
-        while (i--)
-        {
-            if (this.children[i] !== this.game.world.camera.target)
-            {
-                this.children[i].postUpdate();
-            }
-        }
+        this.game.camera.updateTarget();
     }
-    else
+
+    for (var i = 0; i < this.children.length; i++)
     {
-        this.game.world.camera.update();
-
-        var i = this.children.length;
-
-        while (i--)
-        {
-            this.children[i].postUpdate();
-        }
+        this.children[i].postUpdate();
     }
+
+    this.updateTransform();
 
 };
 
@@ -209,7 +226,11 @@ Phaser.Stage.prototype.updateTransform = function () {
 */
 Phaser.Stage.prototype.checkVisibility = function () {
 
-    if (document.webkitHidden !== undefined)
+    if (document.hidden !== undefined)
+    {
+        this._hiddenVar = 'visibilitychange';
+    }
+    else if (document.webkitHidden !== undefined)
     {
         this._hiddenVar = 'webkitvisibilitychange';
     }
@@ -220,10 +241,6 @@ Phaser.Stage.prototype.checkVisibility = function () {
     else if (document.msHidden !== undefined)
     {
         this._hiddenVar = 'msvisibilitychange';
-    }
-    else if (document.hidden !== undefined)
-    {
-        this._hiddenVar = 'visibilitychange';
     }
     else
     {
@@ -306,16 +323,23 @@ Phaser.Stage.prototype.visibilityChange = function (event) {
 *
 * An alpha channel is _not_ supported and will be ignored.
 *
+* If you've set your game to be transparent then calls to setBackgroundColor are ignored.
+*
 * @method Phaser.Stage#setBackgroundColor
-* @param {number|string} backgroundColor - The color of the background.
+* @param {number|string} color - The color of the background.
 */
-Phaser.Stage.prototype.setBackgroundColor = function(backgroundColor)
-{
-    var rgb = Phaser.Color.valueToColor(backgroundColor);
-    this._backgroundColor = Phaser.Color.getColor(rgb.r, rgb.g, rgb.b);
+Phaser.Stage.prototype.setBackgroundColor = function (color) {
 
-    this.backgroundColorSplit = [ rgb.r / 255, rgb.g / 255, rgb.b / 255 ];
-    this.backgroundColorString = Phaser.Color.RGBtoString(rgb.r, rgb.g, rgb.b, 255, '#');
+    if (this.game.transparent) { return; }
+
+    Phaser.Color.valueToColor(color, this._bgColor);
+    Phaser.Color.updateColor(this._bgColor);
+
+    //  For gl.clearColor (canvas uses _bgColor.rgba)
+    this._bgColor.r /= 255;
+    this._bgColor.g /= 255;
+    this._bgColor.b /= 255;
+    this._bgColor.a = 1;
 
 };
 
@@ -324,7 +348,7 @@ Phaser.Stage.prototype.setBackgroundColor = function(backgroundColor)
 *
 * @method Phaser.Stage#destroy
 */
-Phaser.Stage.prototype.destroy  = function () {
+Phaser.Stage.prototype.destroy = function () {
 
     if (this._hiddenVar)
     {
@@ -347,16 +371,13 @@ Object.defineProperty(Phaser.Stage.prototype, "backgroundColor", {
 
     get: function () {
 
-        return this._backgroundColor;
+        return this._bgColor.color;
 
     },
 
     set: function (color) {
 
-        if (!this.game.transparent)
-        {
-            this.setBackgroundColor(color);
-        }
+        this.setBackgroundColor(color);
 
     }
 
